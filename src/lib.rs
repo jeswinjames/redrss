@@ -1,5 +1,5 @@
-use serde::Deserialize;
-use serde_json;
+use serde::{Deserialize};
+use serde_json::{Value};
 use reqwest;
 
 #[derive(Deserialize, Debug)]
@@ -8,6 +8,24 @@ pub struct Rss {
     post_type: String,
     no_of_post: u8,
     webhook: String
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Embeds {
+    title: String,
+    #[serde(rename(deserialize = "selftext"))]
+    description: String,
+    //TODO CHANGE from url to permalink as some urls have image links and not post ones
+    //Proper way is to concatenate reddit.com with permalink
+    url: String,
+    #[serde(rename(serialize = "type"))]
+    m_type: Option<String>
+}
+
+impl Embeds {
+    fn mutate(&mut self) {
+        self.m_type = Some("rich".to_owned());
+    }
 }
 
 impl Rss {
@@ -30,6 +48,13 @@ pub fn request_gun(url: &str) -> Result<String, &'static str> {
         return Err("Got 404 error");
     }
     Ok(res.text().unwrap())
+}
+
+pub fn content_filter(response_string: String) -> Result<Embeds,()> {
+    let loose_json_object: Value = serde_json::from_str(&response_string).unwrap();
+    let mut v: Embeds = serde_json::from_value(loose_json_object["data"]["children"][0]["data"].to_owned()).unwrap();
+    v.mutate();
+    Ok(v)
 }
 
 #[cfg(test)]
@@ -65,5 +90,21 @@ mod tests {
     fn test_request_gun() {
         let url = "https://google.com";
         assert!(request_gun(url).is_ok());
+    }
+
+    #[test]
+    fn test_content_filter() {
+        let dummy_string = r#"{
+                             "data": {
+                               "children": [{
+                                           "data": {
+                                                  "title": "test_title",
+                                                  "selftext": "test descriptION",
+                                                  "url": "dummy_url"
+                                                    }
+                                           }]
+                                    }
+                              }"#;
+        assert!(content_filter(dummy_string.to_owned()).is_ok());
     }
 }
