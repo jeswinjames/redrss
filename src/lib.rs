@@ -1,16 +1,21 @@
-use serde::{Deserialize};
+use serde::{Serialize, Deserialize};
 use serde_json::{Value};
-use reqwest;
+use reqwest::header::CONTENT_TYPE;
+
+pub enum Rtype {
+    Get,
+    Post(String)
+}
 
 #[derive(Deserialize, Debug)]
 pub struct Rss {
     subreddit: String,
     post_type: String,
     no_of_post: u8,
-    webhook: String
+    pub webhook: String
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct Embeds {
     title: String,
     #[serde(rename(deserialize = "selftext"))]
@@ -28,6 +33,21 @@ impl Embeds {
     }
 }
 
+#[derive(Serialize, Debug)]
+pub struct DiscordContent {
+    content: String,
+    embeds: Vec<Embeds>
+}
+
+impl DiscordContent {
+    pub fn new(msg_contents: &str, embeds: Embeds) -> DiscordContent {
+        DiscordContent {
+            content: msg_contents.to_owned(),
+            embeds: vec!(embeds)
+        }
+    }
+}
+
 impl Rss {
     pub fn new(json_object: &str) -> Rss {
         let r: Rss = serde_json::from_str(json_object).unwrap();
@@ -40,17 +60,22 @@ impl Rss {
     }
 }
 
-pub fn request_gun(url: &str) -> Result<String, &'static str> {
+pub fn request_gun(url: &str, r_type: Rtype) -> Result<String, &'static str> {
     let custom_ua = "redrss-bot/0.1.0 reqwest/0.10.6 (by /u/n01syspy)";
     let client = reqwest::blocking::Client::builder().user_agent(custom_ua).build().expect("Client Building failed");
-    let res = client.get(url).send().expect("Error in firing");
-    if res.status().as_u16() != 200 {
+    let res = match r_type {
+        Rtype::Get => client.get(url).send().expect("Error in firing"),
+        Rtype::Post(data) => client.post(url).body(data)
+                                   .header(CONTENT_TYPE, "application/json")
+                                   .send().expect("Error in firing")};
+    if res.status().as_u16() == 400 {
+        //TODO COVER A RANGE OF HTTP ERRORS INSTEAD OF ONLY 404
         return Err("Got 404 error");
     }
     Ok(res.text().unwrap())
 }
 
-pub fn content_filter(response_string: String) -> Result<Embeds,()> {
+pub fn content_extractor(response_string: String) -> Result<Embeds,()> {
     let loose_json_object: Value = serde_json::from_str(&response_string).unwrap();
     let mut v: Embeds = serde_json::from_value(loose_json_object["data"]["children"][0]["data"].to_owned()).unwrap();
     v.mutate();
@@ -72,6 +97,14 @@ mod tests {
 
         let test_r = Rss::new(&sample_json);
         assert_eq!(test_r.subreddit, "Test");
+        let embed = Embeds {
+                    title: String::from("Test"),
+                    description: String::from("Test Description"),
+                    url: String::from("test url"),
+                    m_type: Some(String::from("rich"))
+                    };
+        let test_r = DiscordContent::new("teeeest", embed);
+        assert_eq!(test_r.embeds[0].m_type, Some(String::from("rich")));
     }
 
     #[test]
@@ -89,11 +122,11 @@ mod tests {
     #[test]
     fn test_request_gun() {
         let url = "https://google.com";
-        assert!(request_gun(url).is_ok());
+        assert!(request_gun(url, Rtype::Get).is_ok());
     }
 
     #[test]
-    fn test_content_filter() {
+    fn test_content_extractor() {
         let dummy_string = r#"{
                              "data": {
                                "children": [{
@@ -105,6 +138,6 @@ mod tests {
                                            }]
                                     }
                               }"#;
-        assert!(content_filter(dummy_string.to_owned()).is_ok());
+        assert!(content_extractor(dummy_string.to_owned()).is_ok());
     }
 }
