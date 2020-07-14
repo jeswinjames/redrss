@@ -1,6 +1,6 @@
 use serde::{Serialize, Deserialize};
 use serde_json::{Value};
-use reqwest::header::CONTENT_TYPE;
+use reqwest::header::{CONTENT_TYPE, USER_AGENT};
 
 pub enum Rtype {
     Get,
@@ -62,11 +62,14 @@ impl Rss {
 
 pub fn request_gun(url: &str, r_type: Rtype) -> Result<String, &'static str> {
     let custom_ua = "redrss-bot/0.1.0 reqwest/0.10.6 (by /u/n01syspy)";
-    let client = reqwest::blocking::Client::builder().user_agent(custom_ua).build().expect("Client Building failed");
+    let client = reqwest::blocking::Client::new();
     let res = match r_type {
-        Rtype::Get => client.get(url).send().expect("Error in firing"),
+        Rtype::Get => client.get(url)
+                            .header(USER_AGENT, custom_ua)
+                            .send().expect("Error in firing"),
         Rtype::Post(data) => client.post(url).body(data)
                                    .header(CONTENT_TYPE, "application/json")
+                                   .header(USER_AGENT, custom_ua)
                                    .send().expect("Error in firing")};
     if res.status().as_u16() == 400 {
         //TODO COVER A RANGE OF HTTP ERRORS INSTEAD OF ONLY 404
