@@ -12,7 +12,8 @@ pub struct Rss {
     subreddit: String,
     post_type: String,
     no_of_post: u8,
-    pub webhook: String
+    pub webhook: String,
+    pub frequency: String
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -95,7 +96,8 @@ mod tests {
                             "subreddit": "Test",
                             "post_type": "hot",
                             "no_of_post": 10,
-                            "webhook": "samp"
+                            "webhook": "samp",
+                            "frequency": "1 hour"
                             }"#;
 
         let test_r = Rss::new(&sample_json);
@@ -117,7 +119,8 @@ mod tests {
                         subreddit: String::from("rust"),
                         post_type: String::from("Top"),
                         no_of_post: 1,
-                        webhook: String::from("test")};
+                        webhook: String::from("test"),
+                        frequency: String::from("1 hour")};
         let obtained_url = rss_object.url_crafter();
         assert_eq!(hardcoded_url, obtained_url);
     }
