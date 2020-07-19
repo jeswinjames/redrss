@@ -1,4 +1,5 @@
 use clokwerk::{Scheduler, Interval};
+use chrono;
 use std::thread;
 use redrss::Rss;
 use redrss::Rtype;
@@ -25,7 +26,7 @@ fn runner(rss_object: &Rss) {
     let red_url = rss_object.url_crafter();
     let resp_str = redrss::request_gun(&red_url, Rtype::Get).unwrap();
     let red_msg = redrss::content_extractor(resp_str).unwrap();
-    let disc_msg = DiscordContent::new("Heads Up! You got a post!", red_msg);
+    let disc_msg = DiscordContent::new("Heads Up! Here's the top post of the day!", red_msg);
     let disc_msg = serde_json::to_string(&disc_msg).unwrap();
     let _resp = redrss::request_gun(&rss_object.webhook, Rtype::Post(disc_msg));
 }
@@ -34,8 +35,8 @@ fn main() {
     let json_object = fs::read_to_string(CONFIG_FILE).expect("File Read failed");
     let rss_object = Rss::new(&json_object);
     let (freq_enum, milliseconds) = freq_converter(rss_object.frequency.clone());
-    let mut scheduler = Scheduler::new();
-    scheduler.every(freq_enum).run(move || runner(&rss_object));
+    let mut scheduler = Scheduler::with_tz(chrono::Utc);
+    scheduler.every(freq_enum).at("1:00 am").run(move || runner(&rss_object));
     let _thread_handle = scheduler.watch_thread(Duration::from_millis(milliseconds));
     loop { thread::park() };
 }
